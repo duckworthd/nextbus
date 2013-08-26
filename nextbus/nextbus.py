@@ -356,7 +356,11 @@ def _fetch_xml(args):
   """Download XML, convert to attributes dictionary"""
   response = requests.get(WEBSERVICES, params=args)
   xml = ET.fromstring(response.text)
-  return _xml2attrs(xml).children
+  result = _xml2attrs(xml).children
+  if len(result.children) > 0 and result.children[0].tag == 'Error':
+    raise NextBusException(result.children[0].text)
+  else:
+    return result
 
 
 def _xml2attrs(elem):
@@ -395,6 +399,10 @@ def _epoch(time):
     start = datetime.utcfromtimestamp(0)
     delta = time - start
     return int(delta.total_seconds() * 1000)
+
+
+class NextBusException(Exception):
+  pass
 
 
 if __name__ == '__main__':
