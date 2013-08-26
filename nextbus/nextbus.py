@@ -10,13 +10,22 @@ WEBSERVICES = 'http://webservices.nextbus.com/service/publicXMLFeed'
 
 
 class NextBus(object):
+  """Raw API for interacting with nextbus.com
 
-  def __init__(self):
-    self.agency = None
-    self.route  = None
-    self.time   = None
-
+  This API returns the direct output of a call to the NextBus XML API.
+  """
   def vehicle_locations(self, agency, route, time=0):
+    """Get all vehicle locations for a particular route
+
+    Parameters
+    ----------
+    agency : str
+        agency code (see `NextBus.agencies`)
+    route : str
+        route code (see `NextBus.routes`)
+    time : int
+        number of milliseconds since epoch. if 0, now - 15 minutes.
+    """
     return _fetch_xml({
       'command': 'vehicleLocations',
       'a': agency,
@@ -25,6 +34,15 @@ class NextBus(object):
     })
 
   def schedule(self, agency, route):
+    """Get schedule for a particular route
+
+    Parameters
+    ----------
+    agency : str
+        agency code (see `NextBus.agencies`)
+    route : str
+        route code (see `NextBus.routes`)
+    """
     return _fetch_xml({
       'command': 'schedule',
       'a': agency,
@@ -32,12 +50,28 @@ class NextBus(object):
     })
 
   def routes(self, agency):
+    """Get all routes run by an agency
+
+    Parameters
+    ----------
+    agency : str
+        agency code (see `NextBus.agencies`)
+    """
     return _fetch_xml({
       'command': 'routeList',
       'a': agency,
     })
 
   def stops(self, agency, route):
+    """Get all stops and directions a route can take for a particular route
+
+    Parameters
+    ----------
+    agency : str
+        agency code (see `NextBus.agencies`)
+    route : str
+        route code (see `NextBus.routes`)
+    """
     return _fetch_xml({
       'command': 'routeConfig',
       'a': agency,
@@ -45,17 +79,37 @@ class NextBus(object):
     })
 
   def agencies(self):
+    """Get all bus agencies served by NextBus"""
     return _fetch_xml({
       'command': 'agencyList',
     })
 
 
 def agencies():
+  """Get all agencies tracked by NextBus
+
+  Returns
+  -------
+  agencies : [Agency]
+  """
   result = NextBus().agencies()
   return [Agency(**e.attrs) for e in result if e.tag == 'agency']
 
 
 class Agency(object):
+  """A single agency served by NextBus
+
+  Parameters
+  ----------
+  tag : str
+      unique identifier for this agency
+  title : str
+      human-readable name for this agency
+  regionTitle : str
+      area served by this agency (e.g. California-Northern)
+  shortTitle : str
+      a shorter human-readable name for this agency
+  """
   def __init__(self, tag, title, regionTitle, shortTitle=None, **kwargs):
     self.tag          = str(tag)
     self.title        = str(title)
@@ -64,6 +118,12 @@ class Agency(object):
 
   @property
   def routes(self):
+    """All routes this agency serves
+
+    Returns
+    -------
+    routes : [Route]
+    """
     result = _fetch_xml({
       'command': 'routeList',
       'a': self.tag,
@@ -78,6 +138,19 @@ class Agency(object):
 
 
 class Route(object):
+  """A single transit route. e.g. SF MUNI's N bus
+
+  Parameters
+  ----------
+  agency : str
+      tag of agency running this route
+  tag : str
+      tag of this route
+  title : str
+      human-readable title for this route
+  shortTitle : str
+      short human-readable title for this route
+  """
   def __init__(self, agency, tag, title, shortTitle=None, **kwargs):
     self.agency      = str(agency)
     self.tag         = str(tag)
@@ -86,6 +159,16 @@ class Route(object):
 
   @property
   def directions(self):
+    """Get paths followed by each direction this bus can travel
+
+    A bus typically travels 2 directions: inbound and outbound. These paths
+    need not be the same, however, and there may be alternative paths of
+    travel. This function lets one enumerate all such paths.
+
+    Returns
+    -------
+    directions : [Direction]
+    """
     result = _fetch_xml({
       'command': 'routeConfig',
       'a': self.agency,
@@ -107,6 +190,12 @@ class Route(object):
 
   @property
   def stops(self):
+    """Get all bus stops served by this route
+
+    Returns
+    -------
+    stops : [Stop]
+    """
     result = _fetch_xml({
       'command': 'routeConfig',
       'a': self.agency,
@@ -118,6 +207,15 @@ class Route(object):
 
   @property
   def schedule(self):
+    """Get schedule for this route
+
+    This call retrieves the times which this bus runs, and its expected arrival
+    time at each stop.
+
+    Result
+    ------
+    runs : [Run]
+    """
     result = _fetch_xml({
       'command': 'schedule',
       'a': self.agency,
@@ -161,6 +259,20 @@ class Route(object):
 
 
 class Run(object):
+  """A single run of a particular route, with times of arrival
+
+  Parameters
+  ----------
+  route : str
+      tag of route this bus runs
+  stops : [{"stop": Stop, "time": datetime.time}]
+      list of stops and arrival times
+  scheduleClass : str
+  serviceClass : str
+  direction : str
+      tag of direction of travel
+  blockID : str
+  """
   def __init__(self, route, stops, scheduleClass, serviceClass, direction, blockID, **kwargs):
     self.route          = route
     self.stops          = stops
@@ -178,6 +290,19 @@ class Run(object):
 
 
 class Direction(object):
+  """A direction of travel for a single route
+
+  Parameters
+  ----------
+  route : str
+      route identifier
+  stops : [Stop]
+  tag : str
+      identifier for this direction
+  title : str
+      human-readable name for this direction
+  name : str
+  """
   def __init__(self, route, stops, tag, title, name, **kwargs):
     self.route = str(route)
     self.stops = stops
@@ -194,6 +319,22 @@ class Direction(object):
 
 
 class Stop(object):
+  """A single bus stop
+
+  Parameters
+  ----------
+  route : str
+      route identifier
+  tag : str
+      identifier for this stop
+  title : str
+      human-readable name for this stop
+  lat : float
+  lon : float
+  stopId : str
+  shortTitle : str
+      short human-readable name for this stop
+  """
   def __init__(self, route, tag, title, lat, lon, stopId=None, shortTitle=None, **kwargs):
     self.route       = str(route)
     self.tag         = str(tag)
@@ -247,10 +388,13 @@ def _xml2attrs(elem):
 
 
 def _epoch(time):
-  """milliseconds since _epoch"""
-  _epoch = datetime.utcfromtimestamp(0)
-  delta = dt - _epoch
-  return int(delta.total_seconds() * 1000)
+  """milliseconds since 12AM Jan 1, 1970"""
+  if isinstance(time, float) or isinstance(time, int):
+    return time
+  elif isinstance(time, datetime.datetime):
+    start = datetime.utcfromtimestamp(0)
+    delta = time - start
+    return int(delta.total_seconds() * 1000)
 
 
 if __name__ == '__main__':
